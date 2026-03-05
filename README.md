@@ -2,6 +2,18 @@
 
 A runtime translation patch for **Lineage Classic TW** that replaces Chinese/Korean game text with English — no file modification, no repacking, fully reversible.
 
+## 🛡️ Is This Safe?
+
+**Yes.** Here's why in plain English:
+
+- **No game files are changed.** The original game DLL is simply renamed (backed up), and our translation DLL sits in its place. The game itself is untouched.
+- **Nothing is sent to the server.** The patch works 100% locally on your computer. It only changes what text *you* see on your screen — the game still talks to the server in exactly the same way as normal.
+- **The server can't tell the difference.** Your game client sends and receives the same network packets as every other player. The translation only happens *after* the game has already decrypted its own files, right before it shows text on your screen. Think of it like reading subtitles — the movie doesn't know you're reading them.
+- **Fully reversible.** Run `uninstall.bat` and the original DLL is restored. Or just reinstall the game. No traces left.
+- **Open source.** All the code is right here — you can read every line yourself. The proxy DLL is ~90 lines of C. No obfuscation, no hidden behavior.
+
+> **TL;DR:** This is like putting a transparent overlay on your screen that translates text. The game doesn't know, the server doesn't know, and you can remove it anytime.
+
 ## 📊 Current Coverage
 
 | Category | Translated | Total | Coverage |
