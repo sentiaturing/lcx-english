@@ -78,11 +78,21 @@ Game updates can affect the patch in **two ways:**
 
 1. **The DLL gets replaced.** The launcher overwrites `libcrypto-3-x64.dll` with the original every update. **Fix:** Just re-run `install.bat` as administrator.
 
-2. **The game data changes.** This is the trickier one. The patch works by matching decrypted data blobs by their exact **size and fingerprint** (the first 8 bytes of each blob). When the game adds or changes items, strings, or other data, those blobs change size — and our patches no longer match. When this happens, the DLL loads fine but the translations silently don't apply (the game stays in Chinese).
+2. **The game data changes.** The patch works by matching decrypted data blobs by their exact **size and fingerprint** (first 8 bytes). When the game adds or changes items/strings, those blobs change size and our patches silently stop matching (game stays in Chinese).
 
-   **Fix:** The patches and fingerprint files in this repo need to be regenerated for the new game version. Check for updates to this repo, or use `src/proxy_dump.c` to recapture the new blobs and regenerate patches yourself (see Building from Source).
+   **Automatic fix** — run the auto-update script:
+   ```
+   python update.py
+   ```
+   This will:
+   - Deploy a capture DLL and ask you to launch/close the game once
+   - Find the new string and item data blobs automatically
+   - Regenerate the translation patches
+   - Restore the translation DLL
 
-> **In short:** After every update, first try re-running `install.bat`. If the game is still in Chinese, the patch files need to be updated — check this repo for a new release.
+   **Requires:** Python 3 + `zstandard` (`pip install zstandard`)
+
+> **In short:** After every update, first try re-running `install.bat`. If still Chinese, run `python update.py`.
 
 ---
 
