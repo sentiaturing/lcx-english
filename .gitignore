@@ -1,0 +1,47 @@
+# ====================================================
+# Whitelist-style .gitignore
+# Ignore EVERYTHING (game files), then whitelist our project files.
+# ====================================================
+
+# Ignore everything by default
+*
+
+# ---- Whitelist: project root files ----
+!.gitignore
+!README.md
+
+# ---- Whitelist: source code ----
+!src/
+!src/**
+
+# ---- Whitelist: translation scripts ----
+!scripts/
+!scripts/**
+
+# ---- Whitelist: pre-built patches ----
+!patches/
+!patches/**
+
+# ---- Whitelist: translation reference data ----
+!translations/
+!translations/**
+
+# ---- Whitelist: installer package ----
+!install/
+!install/**
+
+# ---- Whitelist: build output ----
+!build/
+!build/**
+
+# ---- Still ignore build intermediates inside whitelisted dirs ----
+*.o
+*.obj
+
+# ---- IDE / OS junk ----
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
