@@ -74,7 +74,15 @@ del libcrypto_orig.dll
 
 ### After a Game Update
 
-When the game updates, the launcher replaces `libcrypto-3-x64.dll` with the original — this removes the patch. To restore it, simply **re-run `install.bat` as administrator** after each update. Your translation patches and fingerprint files are stored in your user profile and won't be affected by updates.
+Game updates can affect the patch in **two ways:**
+
+1. **The DLL gets replaced.** The launcher overwrites `libcrypto-3-x64.dll` with the original every update. **Fix:** Just re-run `install.bat` as administrator.
+
+2. **The game data changes.** This is the trickier one. The patch works by matching decrypted data blobs by their exact **size and fingerprint** (the first 8 bytes of each blob). When the game adds or changes items, strings, or other data, those blobs change size — and our patches no longer match. When this happens, the DLL loads fine but the translations silently don't apply (the game stays in Chinese).
+
+   **Fix:** The patches and fingerprint files in this repo need to be regenerated for the new game version. Check for updates to this repo, or use `src/proxy_dump.c` to recapture the new blobs and regenerate patches yourself (see Building from Source).
+
+> **In short:** After every update, first try re-running `install.bat`. If the game is still in Chinese, the patch files need to be updated — check this repo for a new release.
 
 ---
 
@@ -90,7 +98,7 @@ When the game updates, the launcher replaces `libcrypto-3-x64.dll` with the orig
 - Make sure `libcrypto_orig.dll` exists in the game folder alongside `libcrypto-3-x64.dll`. The proxy needs the original DLL to forward OpenSSL calls. If it's missing, reinstall the game and run `install.bat` again.
 
 **Game updated and patch stopped working**
-- This is normal. Game updates replace the DLL. Just re-run `install.bat` as admin after each update.
+- First, re-run `install.bat` as admin (the update replaced the DLL). If it's still in Chinese after that, the game data changed and the patches need to be regenerated — check this repo for an updated release.
 
 **I want to completely remove all traces**
 1. Run `uninstall.bat` as admin (restores original DLL)
