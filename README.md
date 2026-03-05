@@ -2,6 +2,8 @@
 
 A runtime translation patch for **Lineage Classic TW** that replaces Chinese/Korean game text with English — no file modification, no repacking, fully reversible.
 
+> **Created and maintained by [Sentia Turing](mailto:sentiaturingllc@gmail.com).** This project takes time to maintain — especially after game updates that break patches. If you find it useful, consider supporting the project by sending game cards or game time to **sentiaturingllc@gmail.com**. Every bit helps keep the translations going! 💙
+
 ## 🛡️ Is This Safe?
 
 **Yes.** Here's why in plain English:

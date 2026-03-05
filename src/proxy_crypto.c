@@ -1,7 +1,10 @@
 /*
- * Proxy DLL v11 - Patches + embedded speedhack
+ * Lineage Classic English Translation Patch - Proxy DLL v11
+ * Created by Sentia Turing (sentiaturingllc@gmail.com)
+ * https://github.com/sentiaturing/lcx-english
+ *
+ * Runtime translation via OpenSSL proxy DLL interception.
  * Translations + IAT-based timing hooks in one DLL.
- * No separate speedhack.dll needed (evades NCGuard module scan).
  */
 #include <stdio.h>
 #include <stdlib.h>

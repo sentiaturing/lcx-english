@@ -1,7 +1,10 @@
 /*
- * Proxy DLL - DUMP MODE
+ * Lineage Classic English Translation Patch - Blob Capture DLL
+ * Created by Sentia Turing (sentiaturingllc@gmail.com)
+ * https://github.com/sentiaturing/lcx-english
+ *
  * Captures all decrypted zstd blobs to files for analysis.
- * Temporary build - use to recapture blobs after game update.
+ * Used to recapture blobs after game updates.
  */
 #include <stdio.h>
 #include <stdlib.h>
