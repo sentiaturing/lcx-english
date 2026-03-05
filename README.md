@@ -72,6 +72,30 @@ copy /Y libcrypto_orig.dll libcrypto-3-x64.dll
 del libcrypto_orig.dll
 ```
 
+### After a Game Update
+
+When the game updates, the launcher replaces `libcrypto-3-x64.dll` with the original — this removes the patch. To restore it, simply **re-run `install.bat` as administrator** after each update. Your translation patches and fingerprint files are stored in your user profile and won't be affected by updates.
+
+---
+
+## ❓ Troubleshooting
+
+**Game is still in Chinese after installing**
+- Make sure you ran `install.bat` as **administrator** (right-click → Run as administrator). The game is installed in `Program Files`, which requires admin access to modify. If you didn't run as admin, the script fails silently — just run it again as admin.
+
+**How do I know the patch is installed?**
+- Check the file size of `libcrypto-3-x64.dll` in the game folder. The original is ~4.7 MB. Our proxy is ~912 KB. If it's still 4.7 MB, the install didn't work — run `install.bat` as admin.
+
+**Game crashes on startup**
+- Make sure `libcrypto_orig.dll` exists in the game folder alongside `libcrypto-3-x64.dll`. The proxy needs the original DLL to forward OpenSSL calls. If it's missing, reinstall the game and run `install.bat` again.
+
+**Game updated and patch stopped working**
+- This is normal. Game updates replace the DLL. Just re-run `install.bat` as admin after each update.
+
+**I want to completely remove all traces**
+1. Run `uninstall.bat` as admin (restores original DLL)
+2. Delete `%USERPROFILE%\lcx_final\` and `%USERPROFILE%\lcx_decrypted\`
+
 ---
 
 ## ✨ How It Works
