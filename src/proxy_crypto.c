@@ -4,7 +4,6 @@
  * https://github.com/sentiaturing/lcx-english
  *
  * Runtime translation via OpenSSL proxy DLL interception.
- * Translations + IAT-based timing hooks in one DLL.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,7 +13,7 @@
 static HMODULE hOrigDLL = NULL;
 static FILE *logFile = NULL;
 static FILE *pktLog = NULL;
-static FILE *shLog = NULL;
+
 static CRITICAL_SECTION cs;
 
 #define MAX_PATCHES 8
@@ -209,227 +208,6 @@ __declspec(dllexport) int EVP_CIPHER_CTX_ctrl(void *ctx, int type, int arg,
   return oCtrl(ctx, type, arg, ptr);
 }
 
-/* ============================================================
- * EMBEDDED SPEEDHACK ENGINE
- * ============================================================ */
-static double sh_speed = 1.0;
-static int sh_enabled = 0;
-static int sh_pulse = 0; /* 0=off, 1=pulse mode */
-static DWORD sh_base32 = 0;
-static ULONGLONG sh_base64 = 0;
-static DWORD sh_basemm = 0;
-static LARGE_INTEGER sh_baseqpc = {0};
-
-typedef DWORD(WINAPI *fn_GTC)(void);
-typedef ULONGLONG(WINAPI *fn_GTC64)(void);
-typedef DWORD(WINAPI *fn_TGT)(void);
-typedef BOOL(WINAPI *fn_QPC)(LARGE_INTEGER *);
-static fn_GTC r_GTC = NULL;
-static fn_GTC64 r_GTC64 = NULL;
-static fn_TGT r_TGT = NULL;
-static fn_QPC r_QPC = NULL;
-
-static void shlog(const char *fmt, ...) {
-  if (!shLog)
-    return;
-  va_list a;
-  va_start(a, fmt);
-  vfprintf(shLog, fmt, a);
-  va_end(a);
-  fflush(shLog);
-}
-
-static void *sh_iat_hook(HMODULE mod, const char *dll, const char *fn,
-                         void *hook) {
-  if (IsBadReadPtr(mod, sizeof(IMAGE_DOS_HEADER)))
-    return NULL;
-  PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)mod;
-  if (dos->e_magic != 0x5A4D)
-    return NULL;
-  PIMAGE_NT_HEADERS nt = (PIMAGE_NT_HEADERS)((BYTE *)mod + dos->e_lfanew);
-  if (IsBadReadPtr(nt, sizeof(IMAGE_NT_HEADERS)))
-    return NULL;
-  DWORD rva = nt->OptionalHeader.DataDirectory[1].VirtualAddress;
-  if (!rva)
-    return NULL;
-  PIMAGE_IMPORT_DESCRIPTOR imp = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)mod + rva);
-  for (; imp->Name; imp++) {
-    if (_stricmp((char *)mod + imp->Name, dll) != 0)
-      continue;
-    PIMAGE_THUNK_DATA ot =
-        (PIMAGE_THUNK_DATA)((BYTE *)mod + imp->OriginalFirstThunk);
-    PIMAGE_THUNK_DATA t = (PIMAGE_THUNK_DATA)((BYTE *)mod + imp->FirstThunk);
-    for (; ot->u1.AddressOfData; ot++, t++) {
-      if (ot->u1.Ordinal & IMAGE_ORDINAL_FLAG)
-        continue;
-      PIMAGE_IMPORT_BY_NAME n =
-          (PIMAGE_IMPORT_BY_NAME)((BYTE *)mod + ot->u1.AddressOfData);
-      if (strcmp(n->Name, fn) == 0) {
-        void *orig = (void *)t->u1.Function;
-        DWORD old;
-        VirtualProtect(&t->u1.Function, sizeof(void *), PAGE_READWRITE, &old);
-        t->u1.Function = (ULONG_PTR)hook;
-        VirtualProtect(&t->u1.Function, sizeof(void *), old, &old);
-        return orig;
-      }
-    }
-  }
-  return NULL;
-}
-
-typedef BOOL(WINAPI *fn_EPM)(HANDLE, HMODULE *, DWORD, LPDWORD);
-static int sh_hook_all(const char *dll, const char *fn, void *hook) {
-  HMODULE mods[512];
-  DWORD needed;
-  int count = 0;
-  fn_EPM epm = (fn_EPM)GetProcAddress(GetModuleHandleA("kernel32.dll"),
-                                      "K32EnumProcessModules");
-  if (!epm)
-    epm =
-        (fn_EPM)GetProcAddress(LoadLibraryA("psapi.dll"), "EnumProcessModules");
-  if (!epm) {
-    if (sh_iat_hook(GetModuleHandle(NULL), dll, fn, hook))
-      count++;
-    return count;
-  }
-  if (!epm(GetCurrentProcess(), mods, sizeof(mods), &needed))
-    return 0;
-  int n = needed / sizeof(HMODULE);
-  for (int i = 0; i < n && i < 512; i++) {
-    if (sh_iat_hook(mods[i], dll, fn, hook))
-      count++;
-  }
-  return count;
-}
-
-static void sh_reset_base(void) {
-  if (r_GTC)
-    sh_base32 = r_GTC();
-  if (r_GTC64)
-    sh_base64 = r_GTC64();
-  if (r_TGT)
-    sh_basemm = r_TGT();
-  if (r_QPC)
-    r_QPC(&sh_baseqpc);
-}
-
-static DWORD WINAPI sh_h_GTC(void) {
-  DWORD v = r_GTC();
-  if (!sh_enabled)
-    return v;
-  return sh_base32 + (DWORD)((v - sh_base32) * sh_speed);
-}
-static ULONGLONG WINAPI sh_h_GTC64(void) {
-  ULONGLONG v = r_GTC64();
-  if (!sh_enabled)
-    return v;
-  return sh_base64 + (ULONGLONG)((v - sh_base64) * sh_speed);
-}
-static DWORD WINAPI sh_h_TGT(void) {
-  DWORD v = r_TGT();
-  if (!sh_enabled)
-    return v;
-  return sh_basemm + (DWORD)((v - sh_basemm) * sh_speed);
-}
-static BOOL WINAPI sh_h_QPC(LARGE_INTEGER *c) {
-  BOOL r = r_QPC(c);
-  if (!sh_enabled || !r)
-    return r;
-  c->QuadPart = sh_baseqpc.QuadPart +
-                (LONGLONG)((c->QuadPart - sh_baseqpc.QuadPart) * sh_speed);
-  return TRUE;
-}
-
-static DWORD WINAPI sh_hotkey_thread(LPVOID p) {
-  DWORD pulse_timer = 0;
-  int pulse_phase = 0; /* 0=fast, 1=normal */
-  while (1) {
-    Sleep(50);
-    /* Pulse mode: auto-toggle every 2 seconds */
-    if (sh_pulse) {
-      pulse_timer += 50;
-      if (pulse_timer >= (pulse_phase ? 4000 : 500)) { /* 0.5s fast, 4s rest */
-        pulse_timer = 0;
-        pulse_phase = !pulse_phase;
-        sh_enabled = !pulse_phase; /* phase 0=fast, phase 1=normal */
-        if (sh_enabled)
-          sh_reset_base();
-        shlog("[SH] PULSE %s (%.2fx)\n", sh_enabled ? "FAST" : "REST",
-              sh_speed);
-      }
-    }
-    if (GetAsyncKeyState(VK_INSERT) & 1) {
-      sh_pulse = 0; /* disable pulse when manually toggling */
-      sh_enabled = !sh_enabled;
-      if (sh_enabled)
-        sh_reset_base();
-      shlog("[SH] %s (%.2fx)\n", sh_enabled ? "ON" : "OFF", sh_speed);
-    }
-    if (GetAsyncKeyState(VK_PRIOR) & 1) { /* PageUp = pulse mode */
-      sh_pulse = !sh_pulse;
-      pulse_timer = 0;
-      pulse_phase = 0;
-      if (sh_pulse) {
-        sh_enabled = 1;
-        sh_reset_base();
-      } else {
-        sh_enabled = 0;
-      }
-      shlog("[SH] PULSE %s (%.2fx)\n", sh_pulse ? "ON" : "OFF", sh_speed);
-    }
-    if (GetAsyncKeyState(VK_END) & 1) {
-      if (sh_speed > 0.5) {
-        sh_speed -= 0.25;
-        if (sh_enabled)
-          sh_reset_base();
-      }
-      shlog("[SH] Speed: %.2fx\n", sh_speed);
-    }
-    if (GetAsyncKeyState(VK_HOME) & 1) {
-      if (sh_speed < 5.0) {
-        sh_speed += 0.25;
-        if (sh_enabled)
-          sh_reset_base();
-      }
-      shlog("[SH] Speed: %.2fx\n", sh_speed);
-    }
-    if (GetAsyncKeyState(VK_DELETE) & 1) {
-      sh_speed = 1.0;
-      sh_pulse = 0;
-      if (sh_enabled)
-        sh_reset_base();
-      shlog("[SH] RESET 1.0x\n");
-    }
-  }
-  return 0;
-}
-
-static DWORD WINAPI sh_init_thread(LPVOID p) {
-  Sleep(2000);
-  char path[MAX_PATH];
-  GetTempPathA(MAX_PATH, path);
-  strcat(path, "speedhack.log");
-  shLog = fopen(path, "w");
-  shlog("=== SpeedHack v4 (embedded) ===\n");
-  shlog("PID: %d\n\n", GetCurrentProcessId());
-  HMODULE k32 = GetModuleHandleA("kernel32.dll");
-  r_GTC = (fn_GTC)GetProcAddress(k32, "GetTickCount");
-  r_GTC64 = (fn_GTC64)GetProcAddress(k32, "GetTickCount64");
-  r_QPC = (fn_QPC)GetProcAddress(k32, "QueryPerformanceCounter");
-  HMODULE wmm = GetModuleHandleA("winmm.dll");
-  r_TGT = wmm ? (fn_TGT)GetProcAddress(wmm, "timeGetTime") : NULL;
-  sh_reset_base();
-  int n1 = sh_hook_all("kernel32.dll", "GetTickCount", sh_h_GTC);
-  int n2 = sh_hook_all("kernel32.dll", "GetTickCount64", sh_h_GTC64);
-  int n3 = sh_hook_all("kernel32.dll", "QueryPerformanceCounter", sh_h_QPC);
-  int n4 = r_TGT ? sh_hook_all("winmm.dll", "timeGetTime", sh_h_TGT) : 0;
-  shlog("Hooks: GTC=%d GTC64=%d QPC=%d TGT=%d TOTAL=%d\n", n1, n2, n3, n4,
-        n1 + n2 + n3 + n4);
-  shlog("INS=toggle HOME=faster END=slower DEL=reset PGUP=pulse\n");
-  CreateThread(NULL, 0, sh_hotkey_thread, NULL, 0, NULL);
-  return 0;
-}
-
 static void loadP(const char *pp, const char *op, const char *name) {
   FILE *f;
   long sz;
@@ -526,8 +304,7 @@ BOOL WINAPI DllMain(HINSTANCE hDll, DWORD reason, LPVOID r) {
       fprintf(logFile, "%d patches loaded\n", nPatch);
       fflush(logFile);
     }
-    /* Start speedhack in delayed thread */
-    CreateThread(NULL, 0, sh_init_thread, NULL, 0, NULL);
+
   } else if (reason == DLL_PROCESS_DETACH) {
     int i;
     if (logFile) {
